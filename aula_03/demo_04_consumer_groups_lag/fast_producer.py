@@ -16,3 +16,4 @@ for i in range(10000):
 producer.flush()
 print("Carga concluída!")
 
+

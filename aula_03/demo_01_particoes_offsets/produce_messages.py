@@ -29,3 +29,4 @@ for i in range(100):
 producer.flush()
 print("Todas as mensagens foram enviadas!")
 
+

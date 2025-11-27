@@ -55,3 +55,4 @@ echo "📝 Próximos passos:"
 echo "   - Execute: python order_generator.py"
 echo "   - Verifique os dados: bash verify.sh"
 
+

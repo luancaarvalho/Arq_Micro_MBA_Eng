@@ -10,10 +10,23 @@ Esta demo explora a estrutura básica de um tópico no Kafka: partições, repli
 
 ## Passo a Passo
 
-### 1. Preparação
+### 0. Preparar Ambiente Conda
+Primeiro, crie o ambiente conda unificado do curso:
+```bash
+# Na raiz do projeto (Arq_Micro_MBA_Eng/)
+conda env create -f environment.yml
+conda activate arq-microsservicos-mba
+```
+
+**Dependências necessárias:**
+- `confluent-kafka[avro]>=2.3.0` - Cliente Kafka
+- Python 3.11
+
+### 1. Preparação Docker
 Certifique-se que o ambiente Docker está rodando:
 ```bash
-docker-compose up -d
+cd ../../aula_01
+docker compose up -d
 ```
 (Acesse `http://localhost:8080` para abrir o Kafka UI)
 
@@ -37,4 +50,5 @@ Use o script abaixo para ler as mensagens e ver os offsets:
 bash inspect_offsets.sh
 ```
 *Note que os offsets são sequenciais **dentro de cada partição**, mas não há ordem global.*
+
 

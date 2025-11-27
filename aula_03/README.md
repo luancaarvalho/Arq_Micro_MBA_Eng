@@ -63,3 +63,4 @@ docker-compose down
 - Certifique-se de estar rodando os scripts de DENTRO da pasta da demo ou ajustando os caminhos.
 - Confirme se o ambiente conda está ativo: `conda activate arq-microsservicos-mba`.
 
+

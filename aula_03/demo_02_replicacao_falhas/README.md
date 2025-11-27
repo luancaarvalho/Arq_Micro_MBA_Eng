@@ -44,3 +44,4 @@ docker-compose start kafka-2
 ```
 Aguarde alguns segundos e rode `check_isr.sh`. O broker 2 deve voltar para a lista de ISR após sincronizar os dados perdidos.
 
+

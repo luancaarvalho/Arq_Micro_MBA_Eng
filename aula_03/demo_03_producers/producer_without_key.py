@@ -19,3 +19,4 @@ for i in range(20):
 producer.flush()
 print("Concluído. As mensagens devem estar espalhadas entre as partições.")
 
+

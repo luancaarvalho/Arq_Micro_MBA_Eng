@@ -24,3 +24,4 @@ for _ in range(5):
 producer.flush()
 print("Concluído. Note que cada user_id sempre caiu na mesma partição.")
 
+

@@ -135,3 +135,4 @@ Para fazer funcionar completamente, escolha a Opção A (Avro) e:
 
 Ou simplesmente use esta demo como exemplo didático do problema de schemas em Kafka Connect.
 
+

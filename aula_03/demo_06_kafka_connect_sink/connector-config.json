@@ -7,12 +7,10 @@
         "connection.url": "jdbc:postgresql://postgres:5432/demo_db",
         "connection.user": "postgres",
         "connection.password": "postgrespassword",
-        "insert.mode": "upsert",
-        "pk.mode": "record_value",
-        "pk.fields": "order_id",
+        "insert.mode": "insert",
+        "pk.mode": "none",
         "auto.create": "true",
         "auto.evolve": "true",
         "table.name.format": "orders"
     }
 }
-

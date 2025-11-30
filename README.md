@@ -146,5 +146,5 @@ bash scripts/validate.sh       # valida replicação para sinks
 <p>Projeto acadêmico — uso educacional.</p>
 
 <p>Desenvolvido por:<br/>
-👉 <a href="https://www.linkedin.com/in/rafaeld3v/" target="_blank">Rafael Tavares (LinkedIn)</a> - 2517595<br/>
-👉 <a href="https://www.linkedin.com/in/dantedod/" target="_blank">Dante Dantas (LinkedIn)</a> - 2518583</p>
+<a href="https://www.linkedin.com/in/rafaeld3v/" target="_blank">Rafael Tavares (LinkedIn)</a> - 2517595<br/>
+<a href="https://www.linkedin.com/in/dantedod/" target="_blank">Dante Dantas (LinkedIn)</a> - 2518583</p>

@@ -1,11 +1,6 @@
 # Apresentações
 apresentacoes/
 
-# Trabalho: ignore tudo exceto TRABALHO.md e image.png
-/trabalho/*
-!/trabalho/TRABALHO.md
-!/trabalho/image.png
-
 # DEMO_1: não versionar estes scripts de demonstração
 /aula_02/DEMO_1/offset_demo.py
 /aula_02/DEMO_1/consumer_group_demo.py

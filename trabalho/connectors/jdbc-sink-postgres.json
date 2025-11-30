@@ -1,0 +1,19 @@
+{
+  "name": "jdbc-sink-postgres",
+  "config": {
+    "connector.class": "io.debezium.connector.jdbc.JdbcSinkConnector",
+    "tasks.max": "1",
+    "topics": "cdc-source-server.public.products",
+    "connection.url": "jdbc:postgresql://postgres-sink:5432/sink_db",
+    "connection.username": "postgres",
+    "connection.password": "postgrespassword",
+    "insert.mode": "upsert",
+    "primary.key.mode": "record_key",
+    "table.name.format": "products",
+    "delete.enabled": "true",
+    "value.converter": "org.apache.kafka.connect.json.JsonConverter",
+    "value.converter.schemas.enable": "true",
+    "key.converter": "org.apache.kafka.connect.json.JsonConverter",
+    "key.converter.schemas.enable": "true"
+  }
+}

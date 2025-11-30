@@ -14,6 +14,10 @@
     "value.converter": "org.apache.kafka.connect.json.JsonConverter",
     "value.converter.schemas.enable": "true",
     "key.converter": "org.apache.kafka.connect.json.JsonConverter",
-    "key.converter.schemas.enable": "true"
+    "key.converter.schemas.enable": "true",
+    "decimal.handling.mode": "string",
+    "include.unknown.datatypes": "false",
+    "fields.blacklist": "__op,__source_ts_ms,__deleted",
+    "schema.evolution": "basic"
   }
 }

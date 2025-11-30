@@ -78,7 +78,7 @@ git checkout trab_rafael_dante
 
 <p>Com <b>Docker Compose</b>:</p>
 <pre><code>cd trabalho
-docker compose up -d --build
+docker-compose up -d
 </code></pre>
 
 <h3>3) Instale dependências Python (opcional para scripts)</h3>

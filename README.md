@@ -148,9 +148,3 @@ bash scripts/validate.sh       # valida replicação para sinks
 <p>Desenvolvido por:<br/>
 👉 <a href="https://www.linkedin.com/in/rafaeld3v/" target="_blank">Rafael Tavares (LinkedIn)</a> - 2517595<br/>
 👉 <a href="https://www.linkedin.com/in/dantedod/" target="_blank">Dante Dantas (LinkedIn)</a> - 2518583</p>
-
-<hr/>
-
-<p><b>Observação:</b> Não foram criados arquivos separados como <code>ENTREGA.md</code> ou <code>EVIDENCIAS.md</code>; toda a informação necessária está consolidada neste `README.md`.</p>
-
-<p><small>Última atualização: Novembro 2025</small></p>

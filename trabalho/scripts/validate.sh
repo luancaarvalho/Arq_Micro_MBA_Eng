@@ -24,7 +24,8 @@ execute_query() {
     local port=$2
     local db=$3
     local query=$4
-    docker exec -i postgres-$host psql -U postgres -d $db -t -A -c "$query"
+    # Use -t -A to return unaligned tuples only; capture both stdout and stderr
+    docker exec -i postgres-$host psql -U postgres -d $db -t -A -c "$query" 2>&1 || true
 }
 
 # 1. Validar PostgreSQL Sink
@@ -33,12 +34,27 @@ echo -e "${YELLOW}1️⃣  VALIDAÇÃO: PostgreSQL SINK${NC}"
 echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
 echo ""
 
-# Contar produtos no sink
-count_sink=$(execute_query "sink" "5432" "sink_db" "SELECT COUNT(*) FROM products;" 2>/dev/null | tr -d ' ')
+# Checar se o container postgres-sink responde
+echo -n "Checking postgres-sink readiness... "
+if docker exec postgres-sink pg_isready -U postgres -d sink_db >/dev/null 2>&1; then
+    echo -e "${GREEN}ready${NC}"
+else
+    echo -e "${YELLOW}not ready${NC} (container may be starting or unavailable)"
+fi
+
+# Contar produtos no sink (captura stdout/stderr para diagnóstico)
+count_sink_output=$(execute_query "sink" "5432" "sink_db" "SELECT COUNT(*) FROM products;" )
+# normalize whitespace and newlines to a single trimmed number
+count_sink=$(echo "$count_sink_output" | tr -d '\r' | tr -d '\n' | tr -d '[:space:]')
 
 if [ -z "$count_sink" ] || [ "$count_sink" = "0" ]; then
     echo -e "${RED}❌ Nenhum produto encontrado no PostgreSQL Sink${NC}"
     echo "   Verifique se o conector JDBC Sink está funcionando"
+    if [ -n "$count_sink_output" ]; then
+        echo "--- psql output (diagnóstico) ---"
+        echo "$count_sink_output"
+        echo "--- fim do diagnóstico ---"
+    fi
 else
     echo -e "${GREEN}✅ Total de produtos no PostgreSQL Sink: $count_sink${NC}"
 fi
@@ -47,22 +63,18 @@ echo ""
 echo "📋 Listando produtos no PostgreSQL Sink:"
 echo ""
 
-execute_query "sink" "5432" "sink_db" "
-SELECT 
-    id, 
-    name, 
-    price, 
-    stock, 
-    category,
-    TO_CHAR(updated_at, 'YYYY-MM-DD HH24:MI:SS') as updated_at
-FROM products 
-ORDER BY id;
-" 2>/dev/null | while IFS='|' read -r id name price stock category updated_at; do
-    if [ ! -z "$id" ]; then
-        printf "   ID: %-3s | %-35s | R$ %8s | Estoque: %3s | %s\n" \
-            "$id" "$name" "$price" "$stock" "$category"
-    fi
-done
+products_output=$(execute_query "sink" "5432" "sink_db" "SELECT id||'|'||coalesce(name,'')||'|'||coalesce(price::text,'')||'|'||coalesce(stock::text,'')||'|'||coalesce(category,'')||'|'||coalesce(TO_CHAR(updated_at, 'YYYY-MM-DD HH24:MI:SS'),'') as line FROM products ORDER BY id;" )
+
+if [ -z "$products_output" ]; then
+    echo "   (nenhum dado retornado na listagem)"
+else
+    echo "$products_output" | while IFS='|' read -r id name price stock category updated_at; do
+        if [ ! -z "$id" ]; then
+            printf "   ID: %-3s | %-35s | R$ %8s | Estoque: %3s | %s\n" \
+                "$id" "$name" "$price" "$stock" "$category"
+        fi
+    done
+fi
 
 echo ""
 
@@ -121,8 +133,9 @@ echo ""
 
 check_connector() {
     local name=$1
-    local status=$(curl -s http://localhost:8083/connectors/$name/status 2>/dev/null | python3 -c "import sys, json; data=json.load(sys.stdin); print(data['connector']['state'])" 2>/dev/null || echo "UNKNOWN")
-    
+    # Use curl -fs to fail on non-2xx and parse with jq; fallback to UNKNOWN
+    local status=$(curl -sSf http://localhost:8083/connectors/$name/status 2>/dev/null | jq -r '.connector.state' 2>/dev/null || echo "UNKNOWN")
+
     if [ "$status" = "RUNNING" ]; then
         echo -e "   ${GREEN}✅ $name: $status${NC}"
     else

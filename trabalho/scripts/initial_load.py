@@ -1,5 +1,3 @@
-
-
 import psycopg2
 import sys
 from datetime import datetime
@@ -99,4 +97,3 @@ if __name__ == "__main__":
     insert_initial_data()
     print()
     print("Próximo passo: Execute 'python scripts/mutations.py' para testar INSERT/UPDATE/DELETE")
-

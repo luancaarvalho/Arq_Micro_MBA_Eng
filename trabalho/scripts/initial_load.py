@@ -1,14 +1,9 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-"""
-Script de carga inicial - Insere dados iniciais na tabela products
-"""
+
 
 import psycopg2
 import sys
 from datetime import datetime
 
-# Configuração do banco fonte
 DB_CONFIG = {
     'host': 'localhost',
     'port': 5433,
@@ -17,7 +12,6 @@ DB_CONFIG = {
     'password': 'postgrespassword'
 }
 
-# Dados iniciais para inserção
 INITIAL_PRODUCTS = [
     {
         'name': 'Notebook Dell XPS 15',
@@ -57,13 +51,12 @@ INITIAL_PRODUCTS = [
 ]
 
 def insert_initial_data():
-    """Insere dados iniciais na tabela products"""
     try:
-        print("🔌 Conectando ao PostgreSQL fonte...")
+        print("Conectando ao PostgreSQL fonte...")
         conn = psycopg2.connect(**DB_CONFIG)
         cursor = conn.cursor()
         
-        print(f"📦 Inserindo {len(INITIAL_PRODUCTS)} produtos iniciais...")
+        print(f"Inserindo {len(INITIAL_PRODUCTS)} produtos iniciais...")
         
         for product in INITIAL_PRODUCTS:
             cursor.execute("""
@@ -79,24 +72,23 @@ def insert_initial_data():
             ))
             
             product_id = cursor.fetchone()[0]
-            print(f"   ✅ Produto inserido: ID={product_id}, Nome={product['name']}")
+            print(f"Produto inserido: ID={product_id}, Nome={product['name']}")
         
         conn.commit()
-        print(f"\n✅ Carga inicial concluída! {len(INITIAL_PRODUCTS)} produtos inseridos.")
+        print(f"\nCarga inicial concluída! {len(INITIAL_PRODUCTS)} produtos inseridos.")
         
-        # Verificar total de produtos
         cursor.execute("SELECT COUNT(*) FROM products")
         total = cursor.fetchone()[0]
-        print(f"📊 Total de produtos na tabela: {total}")
+        print(f"Total de produtos na tabela: {total}")
         
         cursor.close()
         conn.close()
         
     except psycopg2.Error as e:
-        print(f"❌ Erro ao inserir dados: {e}")
+        print(f"Erro ao inserir dados: {e}")
         sys.exit(1)
     except Exception as e:
-        print(f"❌ Erro inesperado: {e}")
+        print(f"Erro inesperado: {e}")
         sys.exit(1)
 
 if __name__ == "__main__":
@@ -106,5 +98,5 @@ if __name__ == "__main__":
     print()
     insert_initial_data()
     print()
-    print("💡 Próximo passo: Execute 'python scripts/mutations.py' para testar INSERT/UPDATE/DELETE")
+    print("Próximo passo: Execute 'python scripts/mutations.py' para testar INSERT/UPDATE/DELETE")
 

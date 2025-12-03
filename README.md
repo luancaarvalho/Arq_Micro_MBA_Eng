@@ -19,7 +19,7 @@
    <li><b>CDC end-to-end</b> capturando INSERT/UPDATE/DELETE do PostgreSQL via WAL.</li>
    <li><b>Publicação</b> dos eventos em Kafka com gerenciamento de schemas (Schema Registry).</li>
    <li><b>Replicação</b> para PostgreSQL Sink (JDBC Sink Connector) em modo upsert.</li>
-   <li><b>Persistência</b> de arquivos Parquet em MinIO através do S3 Sink Connector.</li>
+   <li><b>Persistência</b> de arquivos Parquet em MinIO (implementada via consumidor Python neste repositório).</li>
    <li><b>Scripts</b> automatizados para setup, carga inicial, mutações de teste e validação.</li>
 </ul>
 
@@ -31,7 +31,7 @@
 [postgres-source] --(WAL CDC)--> [Debezium Source] --(Kafka + Schema Registry)--> [Kafka Topics]
                                                                                           |                      
                                                                                           |--> [JDBC Sink -> postgres-sink]
-                                                                                          |--> [S3 Sink -> MinIO (Parquet)]
+                                                                                          |--> [MinIO (Parquet) <- Consumer Python]
 </pre>
 
 <hr/>
@@ -42,14 +42,14 @@
 Arq_Micro_MBA_Eng/
 └─ trabalho/
     ├─ connectors/
-    │  ├─ debezium-source.json
-    │  ├─ jdbc-sink-postgres.json
-    │  └─ s3-sink-minio.json
+   │  ├─ debezium-source.json
+   │  └─ jdbc-sink-postgres.json
     ├─ scripts/
     │  ├─ setup.sh
     │  ├─ initial_load.py
     │  ├─ mutations.py
-    │  └─ validate.sh
+    │  ├─ validate.sh
+    │  └─ kafka_to_minio.py
     ├─ docker-compose.yml
     └─ requirements.txt
 </pre>
@@ -87,19 +87,32 @@ docker-compose up -d
 
 <h3>4) Execute o setup e cargas de teste</h3>
 
-<pre><code>bash scripts/setup.sh         # registra conectores e prepara o ambiente
+<pre><code>bash scripts/setup.sh         # registra conectores e inicia consumidor MinIO
+
+bash scripts/setup.sh          # rodar setup (cria tabela + registra conectores)
+
+docker exec postgres-source psql -U postgres -d source_db -c "CREATE TABLE IF NOT EXISTS products (id SERIAL PRIMARY KEY, name VARCHAR(255) NOT NULL, description TEXT, price DECIMAL(10,2) NOT NULL, category VARCHAR(100), stock INTEGER DEFAULT 0, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP);"           # Rodar esse comando pois ele esta contido no setup, mas por algum motivo estava quebrando.
+
 python scripts/initial_load.py # insere dados iniciais
+
 python scripts/mutations.py    # insere/atualiza/deleta para testar CDC
+
 bash scripts/validate.sh       # valida replicação para sinks
 </code></pre>
 
-<hr/>
-
+<blockquote>
+<b>⚠️ Observação:</b> O script <code>setup.sh</code> já inicia automaticamente em background o consumidor Python (<code>kafka_to_minio.py</code>) que persiste eventos CDC no MinIO. O log pode ser visualizado em <code>.logs/kafka_to_minio.log</code>.
 <h2>Executando o pipeline</h2>
 
 <ol>
-   <li>Abra o docker-compose e verifique se todos os serviços estão <code>Up</code>.</li>
-   <li>Rode <code>bash scripts/setup.sh</code> (registra conectores).</li>
+   <li>Suba o ambiente: <code>docker-compose up -d</code> e aguarde todos os serviços estarem <code>Up</code>.</li>
+   <li>Rode <code>bash scripts/setup.sh</code> (registra conectores Debezium e JDBC + inicia consumidor MinIO).</li>
+   <li>Rode <code>python scripts/initial_load.py</code> para inserir dados iniciais no PostgreSQL fonte.</li>
+   <li>Rode <code>python scripts/mutations.py</code> para gerar INSERT/UPDATE/DELETE e testar CDC.</li>
+   <li>Valide os dados: <code>bash scripts/validate.sh</code> (compara fonte vs sink e checa MinIO).</li>
+</ol>
+
+<p><b>💡 Dica:</b> O consumidor Python roda em background e grava eventos do Kafka no MinIO continuamente. Para verificar o status: <code>ps aux | grep kafka_to_minio</code></p>i>Rode <code>bash scripts/setup.sh</code> (registra conectores).</li>
    <li>Rode <code>python scripts/initial_load.py</code> para inserir dados iniciais.</li>
    <li>Rode <code>python scripts/mutations.py</code> para gerar INSERT/UPDATE/DELETE.</li>
    <li>Cheque com <code>bash scripts/validate.sh</code> se os dados chegaram nos sinks.</li>
@@ -124,9 +137,28 @@ bash scripts/validate.sh       # valida replicação para sinks
 
 <ul>
    <li><b>Conector JDBC falhando com erro de tipo</b>: verifique o esquema da tabela no Postgres sink e os tipos enviados pelo Debezium (timestamps/decimals podem precisar de configuração no conector). Habilite <code>schema.evolution</code> se desejar que o conector altere colunas automaticamente.</li>
-   <li><b>S3 Sink sem arquivos</b>: verifique parâmetros <code>flush.size</code> e <code>rotate.interval.ms</code> no conector; gere tráfego suficiente no tópico para forçar o flush.</li>
+   <li><b>MinIO sem arquivos</b>: verifique se o consumidor Python (fallback) está em execução e parâmetros de flush/rotacionamento caso utilize o conector S3; gere tráfego suficiente no tópico para forçar o flush.</li>
    <li><b>Conector Debezium não captura</b>: confirme que o PostgreSQL fonte está com <code>wal_level=logical</code> e que existe slot de replicação válido.</li>
 </ul>
+
+<hr/>
+
+<h2>Reset completo do ambiente</h2>
+
+<p>Para limpar completamente o ambiente e recomeçar do zero:</p>
+
+<pre><code>bash scripts/reset.sh</code></pre>
+
+<p>Este script irá:</p>
+<ul>
+   <li>Parar o consumidor Python</li>
+   <li>Deletar conectores Kafka Connect</li>
+   <li>Parar containers Docker</li>
+   <li>Remover todos os volumes (dados serão perdidos)</li>
+   <li>Limpar logs locais</li>
+</ul>
+
+<p><b>⚠️ Atenção:</b> Esta operação é <b>irreversível</b> e remove todos os dados!</p>
 
 <hr/>
 
@@ -136,7 +168,7 @@ bash scripts/validate.sh       # valida replicação para sinks
    <tr><td>Orquestração</td><td>Docker Compose</td></tr>
    <tr><td>Captura CDC</td><td>Debezium (Postgres Source)</td></tr>
    <tr><td>Streaming</td><td>Apache Kafka + Schema Registry</td></tr>
-   <tr><td>Sinks</td><td>JDBC Sink (Postgres), S3 Sink (MinIO/Parquet)</td></tr>
+   <tr><td>Sinks</td><td>JDBC Sink (Postgres), MinIO (Parquet via consumidor Python)</td></tr>
    <tr><td>Lang</td><td>Python (scripts)</td></tr>
 </table>
 

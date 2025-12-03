@@ -56,7 +56,12 @@ echo ""
 
 # 2. Criar tabela no PostgreSQL fonte
 echo -e "${YELLOW}2️⃣  Criando tabela 'products' no PostgreSQL fonte...${NC}"
-docker exec postgres-source psql -U postgres -d source_db <<'SQL'
+
+# Aguardar PostgreSQL estar realmente pronto para aceitar queries
+sleep 3
+
+# Criar tabela usando arquivo SQL temporário
+cat > /tmp/create_table.sql <<'EOSQL'
 CREATE TABLE IF NOT EXISTS products (
     id SERIAL PRIMARY KEY,
     name VARCHAR(255) NOT NULL,
@@ -68,7 +73,6 @@ CREATE TABLE IF NOT EXISTS products (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- Trigger para atualizar updated_at
 CREATE OR REPLACE FUNCTION update_updated_at_column()
 RETURNS TRIGGER AS $$
 BEGIN
@@ -82,9 +86,20 @@ CREATE TRIGGER update_products_updated_at
     BEFORE UPDATE ON products
     FOR EACH ROW
     EXECUTE FUNCTION update_updated_at_column();
-SQL
+EOSQL
 
-echo -e "   ${GREEN}✅ Tabela 'products' criada!${NC}"
+# Executar o SQL no container
+docker exec -i postgres-source psql -U postgres -d source_db < /tmp/create_table.sql > /dev/null 2>&1
+
+if [ $? -eq 0 ]; then
+    echo -e "   ${GREEN}✅ Tabela 'products' criada!${NC}"
+    rm -f /tmp/create_table.sql
+else
+    echo -e "   ${RED}❌ Erro ao criar tabela${NC}"
+    cat /tmp/create_table.sql
+    rm -f /tmp/create_table.sql
+    exit 1
+fi
 echo ""
 
 # 3. Configurar MinIO bucket
@@ -93,9 +108,21 @@ echo "   Aguardando MinIO estar pronto..."
 max_attempts=30
 attempt=0
 while [ $attempt -lt $max_attempts ]; do
-    if docker exec minio mc alias set local http://localhost:9000 minioadmin minioadmin > /dev/null 2>&1; then
-        echo -e "   ${GREEN}✅ MinIO está pronto!${NC}"
-        break
+    # Preferir usar container 'minio' se existir; caso contrário tentar mc local
+    if docker ps --filter "name=minio" --filter "status=running" -q > /dev/null 2>&1; then
+        if docker exec minio mc alias set local http://localhost:9000 minioadmin minioadmin > /dev/null 2>&1; then
+            echo -e "   ${GREEN}✅ MinIO (container) está pronto!${NC}"
+            minio_mode="container"
+            break
+        fi
+    else
+        if command -v mc >/dev/null 2>&1; then
+            if mc alias set local http://localhost:9000 minioadmin minioadmin > /dev/null 2>&1; then
+                echo -e "   ${GREEN}✅ MinIO (host) está pronto!${NC}"
+                minio_mode="host"
+                break
+            fi
+        fi
     fi
     attempt=$((attempt + 1))
     if [ $((attempt % 5)) -eq 0 ]; then
@@ -105,9 +132,21 @@ while [ $attempt -lt $max_attempts ]; do
 done
 
 if [ $attempt -lt $max_attempts ]; then
-    docker exec minio mc mb local/cdc-data 2>/dev/null || echo "   Bucket já existe"
-    docker exec minio mc anonymous set download local/cdc-data 2>/dev/null || true
-    echo -e "   ${GREEN}✅ MinIO configurado!${NC}"
+    # Criar bucket usando método apropriado
+    if [ "${minio_mode}" = "container" ]; then
+        docker exec minio mc mb local/cdc-data 2>/dev/null || echo "   Bucket já existe"
+        docker exec minio mc anonymous set download local/cdc-data 2>/dev/null || true
+        echo -e "   ${GREEN}✅ MinIO (container) configurado!${NC}"
+    else
+        if command -v mc >/dev/null 2>&1; then
+            mc mb local/cdc-data 2>/dev/null || echo "   Bucket já existe"
+            mc anonymous set download local/cdc-data 2>/dev/null || true
+            echo -e "   ${GREEN}✅ MinIO (host) configurado!${NC}"
+        else
+            echo -e "   ${YELLOW}⚠️  Não foi possível configurar bucket: 'mc' não encontrado no host${NC}"
+            echo "   Instale o cliente 'mc' (https://min.io/docs/minio/linux/reference/minio-mc.html) ou rode o MinIO como container"
+        fi
+    fi
 else
     echo -e "   ${RED}❌ Timeout aguardando MinIO${NC}"
 fi
@@ -149,17 +188,10 @@ else
 fi
 echo ""
 
-# 6. Instalar S3 connector no Kafka Connect (se necessário)
-echo -e "${YELLOW}6️⃣  Verificando conectores disponíveis no Kafka Connect...${NC}"
-echo "   (S3 connector será instalado automaticamente se necessário)"
-echo ""
-
-# 5. Registrar conectores
+# 6. Registrar conectores
 register_connector() {
     local config_file=$1
-    local connector_name=$(basename "$config_file" .json)
-    
-    # Verificar se o arquivo existe
+    local connector_name=$(basename "$config_file" .json)    # Verificar se o arquivo existe
     if [ ! -f "$config_file" ]; then
         echo -e "   ${RED}❌ Arquivo não encontrado: $config_file${NC}"
         return 1
@@ -213,7 +245,7 @@ register_connector() {
     sleep 3
 }
 
-echo -e "${YELLOW}7️⃣  Registrando conectores...${NC}"
+echo -e "${YELLOW}6️⃣  Registrando conectores...${NC}"
 
 # Verificar se os arquivos de configuração existem
 if [ ! -f "$CONNECTORS_DIR/debezium-source.json" ]; then
@@ -233,24 +265,34 @@ sleep 10
 # Registrar sinks
 register_connector "$CONNECTORS_DIR/jdbc-sink-postgres.json"
 
-# S3 sink pode ser adicionado depois se necessário
-# register_connector "$CONNECTORS_DIR/s3-sink-minio.json"
-
 echo ""
-
-# 8. Verificar status dos conectores
-echo -e "${YELLOW}8️⃣  Verificando status dos conectores...${NC}"
+# 7. Verificar status dos conectores (Debezium e JDBC)
+echo -e "${YELLOW}7️⃣  Verificando status dos conectores...${NC}"
 sleep 5
 
 check_connector_status() {
     local connector_name=$1
-    status=$(curl -s http://localhost:8083/connectors/$connector_name/status | python3 -c "import sys, json; data=json.load(sys.stdin); print(data['connector']['state'])" 2>/dev/null || echo "UNKNOWN")
+    status=$(curl -s http://localhost:8083/connectors/$connector_name/status | python3 -c "import sys, json; data=json.load(sys.stdin); print(data.get('connector',{}).get('state','UNKNOWN'))" 2>/dev/null || echo "UNKNOWN")
     echo "   $connector_name: $status"
 }
 
 check_connector_status "debezium-postgres-source"
 check_connector_status "jdbc-sink-postgres"
-check_connector_status "s3-sink-minio"
+
+# Iniciar o consumidor Python que grava em MinIO (fallback) — garantimos que exista apenas uma instância
+echo ""
+echo -e "   ${YELLOW}⚠️  Iniciando consumidor Python para MinIO (persistência de eventos)${NC}"
+mkdir -p "$WORK_DIR/.logs"
+if command -v python3 >/dev/null 2>&1; then
+    if pgrep -f kafka_to_minio.py >/dev/null 2>&1; then
+        echo "   ℹ️  Consumidor Python já em execução"
+    else
+        nohup python3 "$WORK_DIR/scripts/kafka_to_minio.py" > "$WORK_DIR/.logs/kafka_to_minio.log" 2>&1 &
+        echo "   ✅ Consumidor Python iniciado (log: $WORK_DIR/.logs/kafka_to_minio.log)"
+    fi
+else
+    echo "   ${RED}❌ python3 não encontrado; não foi possível iniciar consumidor MinIO${NC}"
+fi
 
 echo ""
 echo -e "${GREEN}✅ Setup concluído com sucesso!${NC}"

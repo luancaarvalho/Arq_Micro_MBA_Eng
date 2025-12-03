@@ -154,26 +154,11 @@ services:
     networks:
       - cdc-network
 
-  # DuckDB (para análise local)
-  duckdb:
-    image: python:3.11-slim
-    container_name: duckdb
-    working_dir: /app
-    volumes:
-      - ./scripts:/app/scripts
-      - duckdb-data:/app/data
-    command: tail -f /dev/null
-    networks:
-      - cdc-network
-    depends_on:
-      - minio
-      - postgres-sink
-
 volumes:
   postgres-source-data:
   postgres-sink-data:
   minio-data:
-  duckdb-data:
+  # duckdb-data: (removed)
 
 networks:
   cdc-network:

@@ -1,0 +1,4 @@
+psycopg[binary]>=3.0.0
+kafka-python>=2.0.2
+boto3>=1.28.0
+

@@ -173,6 +173,13 @@ python scripts/setup.py
 - Registra conectores (Debezium + JDBC Sink)
 - Mostra status dos conectores
 
+### 2.1 Para visualizar a replicação veja no minIO localhost:9001 
+```
+  link: http://localhost:9001/login
+  user: minioadmin
+  password: minioadmin
+```
+
 ### 3 Carga Inicial de Dados
 
 ```bash
@@ -197,14 +204,6 @@ python scripts/mutations.py
 - Múltiplos UPDATEs em sequência
 
 **Resultado:** Todos os eventos CDC são capturados pelo Debezium
-
-### 5 Consumidor Kafka → MinIO (Opcional)
-
-```bash
-python scripts/kafka_to_minio.py
-```
-
-**Consome eventos e armazena em MinIO** (modo background)
 
 ### 6 Validar o Pipeline
 

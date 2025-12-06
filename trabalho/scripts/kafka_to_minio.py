@@ -6,17 +6,14 @@ from datetime import datetime, timezone
 from io import BytesIO
 import os
 
-# Kafka settings
 KAFKA_BOOTSTRAP_SERVERS = os.environ.get("KAFKA_BOOTSTRAP_SERVERS", "localhost:9092")
 KAFKA_TOPIC = os.environ.get("KAFKA_TOPIC", "cdc-source-server.public.products")
 
-# MinIO settings
 MINIO_ENDPOINT = os.environ.get("MINIO_ENDPOINT", "localhost:9000")
 MINIO_ACCESS_KEY = os.environ.get("MINIO_ACCESS_KEY", "minioadmin")
 MINIO_SECRET_KEY = os.environ.get("MINIO_SECRET_KEY", "minioadmin")
 MINIO_BUCKET = os.environ.get("MINIO_BUCKET", "cdc-data")
 
-# Optional limit for debugging
 MAX_MESSAGES = int(os.environ.get("KAFKA_TO_MINIO_MAX_MESSAGES", "0"))
 
 
@@ -66,26 +63,23 @@ def main():
         msg = consumer.poll(1.0)
 
         if msg is None:
-            continue  # timeout, sem mensagens
+            continue
 
         if msg.error():
-            print("⚠️ Erro no Kafka:", msg.error())
+            print("Erro no Kafka:", msg.error())
             continue
 
         value = msg.value()
 
-        # Tombstone ou heartbeat → ignorar
         if value is None:
-            print("⚪ Mensagem vazia (tombstone/heartbeat) ignorada.")
+            print("Mensagem vazia (tombstone/heartbeat) ignorada.")
             continue
 
-        # Decodificação segura
         try:
             data = json.loads(value.decode("utf-8"))
         except Exception:
             data = {"raw": value.decode("utf-8", errors="ignore")}
 
-        # Nome do arquivo e path em UTC
         filename = (
             f"product_msg_{utc_timestamp()}_{msg.partition()}_{msg.offset()}.json"
         )
@@ -101,12 +95,12 @@ def main():
             content_type="application/json",
         )
 
-        print(f"📦 Enviado para MinIO → {object_name}")
+        print(f"Enviado para MinIO → {object_name}")
 
         count += 1
 
         if MAX_MESSAGES and count >= MAX_MESSAGES:
-            print("🔚 Limite MAX_MESSAGES atingido, encerrando.")
+            print("Limite MAX_MESSAGES atingido, encerrando.")
             break
 
     consumer.close()

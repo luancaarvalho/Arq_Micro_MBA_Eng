@@ -17,13 +17,8 @@ def run(cmd):
     except:
         return ""
 
-
-# ------------------------------
-# EXECUTAR QUERY DE CONTAGEM
-# ------------------------------
 def pg_count(container, db):
     try:
-        # IMPORTANTE → usar aspas duplas para funcionar no Windows
         cmd = (
             f"docker exec {container} psql -U postgres -d {db} "
             f'-t -A -c "SELECT COUNT(*) FROM products;"'
@@ -38,9 +33,6 @@ print("============================================================")
 print("VALIDAÇÃO DO PIPELINE CDC")
 print("============================================================\n")
 
-# -----------------------------------------
-# 1) PostgreSQL Sink
-# -----------------------------------------
 print("1) PostgreSQL Sink")
 
 ready = "accepting connections" in run(
@@ -54,9 +46,6 @@ else:
 sink_count = pg_count("postgres-sink", "sink_db")
 print(f"   Total produtos no sink: {sink_count}\n")
 
-# -----------------------------------------
-# 2) Comparação Fonte vs Sink
-# -----------------------------------------
 print("2) Comparação Fonte vs Sink")
 
 source_count = pg_count("postgres-source", "source_db")
@@ -67,9 +56,6 @@ if sink_count == source_count and sink_count is not None:
 else:
     print(f"   {YELLOW}Contagens diferentes{NC}")
 
-# -----------------------------------------
-# 3) MinIO (via API)
-# -----------------------------------------
 print("\n3) MinIO")
 
 try:
@@ -90,9 +76,6 @@ except Exception as e:
     print(f"   {RED}MinIO não acessível{NC}")
     print("   Erro:", str(e))
 
-# -----------------------------------------
-# 4) Conectores
-# -----------------------------------------
 print("\n4) Status dos conectores")
 
 
@@ -107,9 +90,6 @@ def connector_status(name):
 for c in ["debezium-postgres-source", "jdbc-sink-postgres"]:
     print(f"   {c}: {connector_status(c)}")
 
-# -----------------------------------------
-# Resumo
-# -----------------------------------------
 print("\nResumo:")
 if sink_count == source_count:
     print(f"   {GREEN}CDC funcionando corretamente{NC}")

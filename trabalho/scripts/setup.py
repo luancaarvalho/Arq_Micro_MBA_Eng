@@ -3,8 +3,8 @@ import time
 import json
 import os
 import sys
+import platform
 from minio import Minio
-from minio.error import S3Error
 
 GREEN = "\033[32m"
 YELLOW = "\033[33m"
@@ -37,6 +37,39 @@ def wait_for_service(check_cmd, name, timeout=60):
     return False
 
 
+def start_kafka_to_minio():
+    print("\nIniciando consumidor Kafka → MinIO...")
+
+    base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+    script_path = os.path.join(base_dir, "scripts", "kafka_to_minio.py")
+    log_dir = os.path.join(base_dir, ".logs")
+    log_file = os.path.join(log_dir, "kafka_to_minio.log")
+
+    os.makedirs(log_dir, exist_ok=True)
+
+    system = platform.system()
+
+    if system == "Windows":
+        cmd = f'start "" python "{script_path}" > "{log_file}" 2>&1'
+        try:
+            subprocess.Popen(cmd, shell=True)
+            print(f"   Consumidor iniciado (Windows). Log: {log_file}")
+        except Exception as e:
+            print(RED + f"Erro ao iniciar consumidor no Windows: {e}" + NC)
+
+    else:  # macOS / Linux
+        cmd = f'nohup python "{script_path}" > "{log_file}" 2>&1 &'
+        try:
+            subprocess.Popen(cmd, shell=True, executable="/bin/bash")
+            print(f"   Consumidor iniciado (Linux/macOS). Log: {log_file}")
+        except Exception as e:
+            print(RED + f"Erro ao iniciar consumidor no Linux/macOS: {e}" + NC)
+
+
+# ---------------------------------------
+# INÍCIO DO SCRIPT
+# ---------------------------------------
+
 print("============================================================")
 print(" SETUP CDC PIPELINE - PYTHON")
 print("============================================================\n")
@@ -44,29 +77,18 @@ print("============================================================\n")
 WORK_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 CONNECTORS_DIR = os.path.join(WORK_DIR, "connectors")
 
-# ------------------------------
-# 1) AGUARDAR POSTGRES SOURCE
-# ------------------------------
 wait_for_service(
     "docker exec postgres-source pg_isready -U postgres -d source_db",
     "PostgreSQL fonte",
 )
 
-# ------------------------------
-# 2) AGUARDAR POSTGRES SINK
-# ------------------------------
 wait_for_service(
-    "docker exec postgres-sink pg_isready -U postgres -d sink_db", "PostgreSQL destino"
+    "docker exec postgres-sink pg_isready -U postgres -d sink_db",
+    "PostgreSQL destino",
 )
 
-# ------------------------------
-# 3) AGUARDAR KAFKA CONNECT
-# ------------------------------
 wait_for_service("curl -s http://localhost:8083", "Kafka Connect")
 
-# ------------------------------
-# 4) CRIAR TABELA PRODUCTS
-# ------------------------------
 print(f"\n{YELLOW}  Criando tabela 'products' no PostgreSQL fonte...{NC}")
 
 SQL = """
@@ -106,47 +128,31 @@ os.remove("create_table.sql")
 
 print(f"   {GREEN}Tabela criada!{NC}")
 
-# ------------------------------
-# 5) CONFIGURAR MINIO via Python SDK
-# ------------------------------
 print(f"\n{YELLOW}  Configurando MinIO...{NC}")
+minio_ready = False
+
+client = Minio(
+    "localhost:9000",
+    access_key="minioadmin",
+    secret_key="minioadmin",
+    secure=False,
+)
 
 try:
-    minio_client = Minio(
-        "localhost:9000",
-        access_key="minioadmin",
-        secret_key="minioadmin",
-        secure=False,
-    )
-
-    # Testa comunicação
-    minio_client.list_buckets()
-    print(f"   {GREEN}MinIO acessível!{NC}")
-
-    bucket = "cdc-data"
-    if not minio_client.bucket_exists(bucket):
-        minio_client.make_bucket(bucket)
-        print(f"   {GREEN}Bucket '{bucket}' criado!{NC}")
+    if not client.bucket_exists("cdc-data"):
+        client.make_bucket("cdc-data")
+        print(f"   {GREEN}Bucket 'cdc-data' criado!{NC}")
     else:
-        print(f"   {BLUE}Bucket '{bucket}' já existe.{NC}")
+        print(f"   {GREEN}Bucket 'cdc-data' já existe.{NC}")
 
+    minio_ready = True
 except Exception as e:
-    print(f"{YELLOW}MinIO não está acessível. Ignorando parte do S3.{NC}")
-    print("   Detalhes:", e)
+    print(f"{RED}Erro acessando MinIO:{NC}", e)
 
-
-# ------------------------------
-# 6) REGISTRAR CONECTORES
-# ------------------------------
 def register_connector(path):
     name = os.path.basename(path).replace(".json", "")
     print(f"{YELLOW}  Registrando conector: {name}{NC}")
 
-    if not os.path.exists(path):
-        print(f"{RED}Arquivo não encontrado: {path}{NC}")
-        return
-
-    # Deleta se já existir
     run(f"curl -s -X DELETE http://localhost:8083/connectors/{name}")
 
     cmd = f'curl -s -X POST http://localhost:8083/connectors -H "Content-Type: application/json" --data @{path}'
@@ -160,14 +166,10 @@ def register_connector(path):
 
 
 print(f"\n{YELLOW} Registrando conectores...{NC}")
-
 register_connector(os.path.join(CONNECTORS_DIR, "debezium-source.json"))
-time.sleep(5)
+time.sleep(4)
 register_connector(os.path.join(CONNECTORS_DIR, "jdbc-sink-postgres.json"))
 
-# ------------------------------
-# 7) STATUS DOS CONECTORES
-# ------------------------------
 print(f"\n{YELLOW}  Verificando status dos conectores...{NC}")
 
 for name in ["debezium-postgres-source", "jdbc-sink-postgres"]:
@@ -179,6 +181,7 @@ for name in ["debezium-postgres-source", "jdbc-sink-postgres"]:
     print(f"   {name}: {state}")
 
 print(f"\n{GREEN}Setup concluído com sucesso!{NC}")
+
 print(
     """
 Próximos passos:
@@ -188,22 +191,4 @@ Próximos passos:
 """
 )
 
-# ------------------------------
-# 8) INICIAR CONSUMIDOR KAFKA → MINIO AUTOMATICAMENTE
-# ------------------------------
-print(f"\n{YELLOW}Iniciando consumidor Kafka → MinIO...{NC}")
-
-KAFKA_TO_MINIO = os.path.join(WORK_DIR, "scripts", "kafka_to_minio.py")
-LOGFILE = os.path.join(WORK_DIR, ".logs", "kafka_to_minio.log")
-
-os.makedirs(os.path.join(WORK_DIR, ".logs"), exist_ok=True)
-
-# Verifica se já está rodando
-check_running = run('wmic process where "CommandLine like \'%kafka_to_minio.py%\'" get ProcessId', silent=True)
-
-if check_running.strip():
-    print(f"   {YELLOW}Consumidor já está em execução. Ignorando.{NC}")
-else:
-    print("   Iniciando consumidor em background...")
-    run(f'start "" python "{KAFKA_TO_MINIO}" > "{LOGFILE}" 2>&1')
-    print(f"   {GREEN}Consumidor iniciado! Log: {LOGFILE}{NC}")
+start_kafka_to_minio()

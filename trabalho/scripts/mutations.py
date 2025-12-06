@@ -223,7 +223,7 @@ def main():
         print(f"  {test_name}: {status}")
     
     print()
-    print(" Aguarde alguns segundos e execute 'bash scripts/validate.sh' para validar os dados nos destinos")
+    print(" Aguarde alguns segundos e execute 'python scripts/validate.py' para validar os dados nos destinos")
 
 if __name__ == "__main__":
     main()

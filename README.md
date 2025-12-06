@@ -136,12 +136,6 @@ trabalho/
 
 <hr>
 
-## Dependências Python
-
-```bash
-pip install -r requirements.txt
-```
-
 **Principais libs:**
 
 - `psycopg2-binary` – Conexão PostgreSQL
@@ -156,6 +150,7 @@ pip install -r requirements.txt
 
 ```bash
 cd trabalho/
+pip install -r requirements.txt
 docker compose up -d
 ```
 
